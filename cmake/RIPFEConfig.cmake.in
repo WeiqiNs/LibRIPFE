@@ -1,0 +1,12 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find dependencies.
+find_dependency(RBP REQUIRED)
+
+# Include the generated targets.
+include("${CMAKE_CURRENT_LIST_DIR}/RIPFETargets.cmake")
+
+# Ensure all required components are present.
+check_required_components(RIPFE)

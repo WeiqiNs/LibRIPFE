@@ -1,4 +1,4 @@
-#include "asym_ipfe_tao.hpp"
+#include "ipfe_tao.hpp"
 
 asym::ipfe::tao::Pp asym::ipfe::tao::ppgen(bool pre, int size, int bound) {
     asym::ipfe::tao::Pp pp{};

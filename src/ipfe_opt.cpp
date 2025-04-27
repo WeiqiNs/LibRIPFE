@@ -1,4 +1,4 @@
-#include "sym_ipre.hpp"
+#include "ipfe_opt.hpp"
 
 // A global value for this specific scheme only.
 const static int B_SIZE = 4;

@@ -1,4 +1,4 @@
-#include "asym_ipfe_kim.hpp"
+#include "ipfe_kim.hpp"
 
 asym::ipfe::kim::Pp asym::ipfe::kim::ppgen(bool pre, int size, int bound) {
     asym::ipfe::kim::Pp pp{};

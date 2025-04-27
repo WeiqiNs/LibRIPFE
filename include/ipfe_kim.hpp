@@ -1,37 +1,17 @@
 #pragma once
 
-#include "asym_ipfe.hpp"
+#include "RBP/bp.hpp"
 
-namespace asym::ipfe::kim {
+namespace ipfe::kim {
     // Struct for the public parameters.
     struct Pp {
-        bool pre;
-        int size;
-        int bound;
-        asym::g1 g1_base;
-        asym::g2 g2_base;
-        asym::point mod;
-        asym::g1Vec g1_table;
-        asym::g2Vec g2_table;
+        std::unique_ptr<BP> pairing_group;
     };
 
-    // We define a new struct for the secret key to include determinant value.
-    struct Sk {
-        asym::Zp det;
-        asym::zpMat B;
-        asym::zpMat Bi;
-    };
-
-    // Struct for the derived functional key.
-    struct Key {
-        asym::g1Vec ct;
-        asym::g1 ctl;
-    };
-
-    // Struct for the ciphertext.
-    struct Ct {
-        asym::g2Vec ct;
-        asym::g2 ctr;
+    // Struct for master secret key.
+    struct Msk {
+        FpMat B;
+        FpMat Bi;
     };
 
     /**
