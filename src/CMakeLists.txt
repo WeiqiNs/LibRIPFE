@@ -1,22 +1,24 @@
-# Get all header and source files.
-file(GLOB SOURCE_LIST CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/*.cpp")
+# Collect all source files.
+file(GLOB SOURCE_LIST CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
-# Make an automatic library - will be static or dynamic based on user setting.
+# Create the library.
 add_library(RIPFE ${SOURCE_LIST})
 
-# Add an alias.
+# Create a target alias.
 add_library(RIPFE::RIPFE ALIAS RIPFE)
 
-# We need this directory, and users of our library will need it too.
+# Set include directories for consumers.
 target_include_directories(RIPFE PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
+# Correctly include the RBP library.
 target_link_libraries(RIPFE PUBLIC RBP::RBP)
 
-# Add RPATH settings
+# Set install paths.
 set_target_properties(RIPFE PROPERTIES
-        INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib"
+        INSTALL_RPATH "$ORIGIN/../lib"
         BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH_USE_LINK_PATH TRUE)
+        INSTALL_RPATH_USE_LINK_PATH TRUE
+)

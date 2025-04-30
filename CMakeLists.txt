@@ -9,73 +9,81 @@ project(
         LANGUAGES CXX
 )
 
-# Set standards.
+# Setup the coverage knob.
+option(ENABLE_CODE_COVERAGE "Build with --coverage flags" OFF)
+if (ENABLE_CODE_COVERAGE)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(--coverage -O0 -g)
+        add_link_options(--coverage)
+    endif ()
+endif ()
+
+# Set C++ standard.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Include desired modules.
+# Include useful CMake modules.
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# Enable the testing.
+# Enable unit testing.
 enable_testing()
 
 # Find required libraries.
 find_package(RBP REQUIRED)
 
-# Find the google test library for testing.
+# Find or fetch GoogleTest for unit testing.
 find_package(GTest)
 if (NOT GTest_FOUND)
     include(FetchContent)
     FetchContent_Declare(
             googletest
-            URL https://github.com/google/googletest/archive/refs/heads/main.zip
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG main
     )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 endif ()
 
-# Add desired subdirectories.
+# Add source and test directories.
 add_subdirectory(src)
 add_subdirectory(test)
 
-# Install targets and files.
+# Define install directory for CMake package files.
+set(RIPFE_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/RIPFE")
+
+# Install the RIPFE target.
 install(TARGETS RIPFE
         EXPORT RIPFETargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
+# Install public headers.
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/RIPFE)
 
+# Install and export CMake targets.
 install(EXPORT RIPFETargets
         FILE RIPFETargets.cmake
         NAMESPACE RIPFE::
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RIPFE)
+        DESTINATION ${RIPFE_CMAKE_INSTALL_DIR}
+)
 
-# Install the configuration file.
-configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/RIPFEConfig.cmake.in
+# Generate and install package config files.
+configure_package_config_file(cmake/RIPFEConfig.cmake.in
         "${CMAKE_CURRENT_BINARY_DIR}/RIPFEConfig.cmake"
-        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RIPFE)
+        INSTALL_DESTINATION ${RIPFE_CMAKE_INSTALL_DIR}
+)
 
 write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/RIPFEConfigVersion.cmake"
         VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion)
+        COMPATIBILITY SameMajorVersion
+)
 
 install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/RIPFEConfig.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}/RIPFEConfigVersion.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RIPFE)
-
-# Install the dependency file.
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/RIPFEDependencies.cmake.in
-        "${CMAKE_CURRENT_BINARY_DIR}/RIPFEDependencies.cmake"
-        @ONLY)
-
-install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/RIPFEDependencies.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RIPFE)
+        DESTINATION ${RIPFE_CMAKE_INSTALL_DIR}
+)

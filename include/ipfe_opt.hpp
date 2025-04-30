@@ -1,71 +1,60 @@
 #pragma once
 
-#include "sym_vector.hpp"
-#include "sym_matrix.hpp"
+#include "RBP/bp.hpp"
 
-namespace sym::ipre {
-    // Struct for the public parameters.
-    struct Pp {
-        bool pre;
-        int size;
-        int bound;
-        sym::g g_base;
-        sym::gt gt_base;
-        sym::point mod;
-        sym::gVec table;
+namespace IPFE::OPT{
+    // Struct for master secret key.
+    struct Msk{
+        FpMat a;
+        FpMat b;
+        FpMat bi;
+        std::unique_ptr<BP> bpg;
     };
 
-    // Struct for the secret key.
-    struct Sk {
-        sym::zpMat A;
-        sym::zpMat B;
-        sym::zpMat Bi;
+    // Struct for function key.
+    struct Sk{
+        G2Vec r;
+        G2Vec vec;
     };
 
-    // Struct for the ciphertext.
-    struct Ct {
-        sym::gVec ctx;
-        sym::gVec ctl;
-        sym::gVec ctr;
+    // Struct for ciphertext.
+    struct Ct{
+        G1Vec r;
+        G1Vec vec;
     };
 
     /**
-     * Generate public parameters which contains the following.
-     *  - pre: a boolean value to indicate whether fast mul in G is used.
-     *  - size: message length.
-     *  - bound: inner product result bound.
-     *  - g_base: a generator in group G.
-     *  - gt_base: the result of e(g_base, g_base).
-     *  - mod: the size of the field.
-     *  - table: a precomputed table, which maybe empty.
-     * @param size - message length.
-     * @param bound - inner product result bound.
+     * Perform setup to generate master secret key.
+     * @param size message length.
+     * @param pre a boolean indicating whether using precompute tables for group exponentiation.
      * @return the generated public parameters.
      */
-    Pp ppgen(bool pre, int size, int bound);
+    Msk setup(int size, const bool& pre = true);
 
     /**
-     * Generate the secret key for the scheme.
-     * @param pp - the public parameters.
-     * @return the generated secret key.
+     * Derive a functional key on the input.
+     * @param msk the master secret key.
+     * @param function the input function vector.
+     * @return the functional key.
      */
-    Sk setup(Pp pp);
+    Sk keygen(const Msk& msk, const IntVec& function);
 
     /**
      * Encrypt a message vector.
-     * @param pp - the public parameters.
-     * @param sk - the secret key.
-     * @param message - the input message vector.
+     * @param msk the master secret key.
+     * @param message the input message vector.
      * @return the ciphertext.
      */
-    Ct enc(Pp pp, Sk sk, const int *message);
+    Ct enc(const Msk& msk, const IntVec& message);
 
     /**
-     * Compute inner product of two messages using their ciphertexts.
-     * @param pp - the public parameters.
-     * @param x - a ciphertext.
-     * @param y - a ciphertext.
+     * Compute inner product between a functional key and a ciphertext.
+     * @param base the base to raise to and compare with.
+     * @param sk a functional key.
+     * @param ct a ciphertext.
+     * @param lower_bound inner product result lower bound.
+     * @param upper_bound inner product result upper bound.
      * @return the integer result of the inner product.
      */
-    int eval(Pp pp, Ct x, Ct y);
+    int dec(const Gt& base, const Sk& sk, const Ct& ct, int lower_bound, int upper_bound);
 }

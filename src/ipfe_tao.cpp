@@ -1,104 +1,72 @@
 #include "ipfe_tao.hpp"
 
-asym::ipfe::tao::Pp asym::ipfe::tao::ppgen(bool pre, int size, int bound) {
-    asym::ipfe::tao::Pp pp{};
-    pp.pre = pre;
-    pp.size = size;
-    pp.bound = bound;
-    pp.c_size = size * 2 + 5;
-    asym::init_get_order(pp.mod);
-    asym::g1_gen(pp.g1_base);
-    asym::g2_gen(pp.g2_base);
-    asym::bp_map(pp.gt_base, pp.g1_base, pp.g2_base);
-    if (pre) {
-        pp.g1_table = asym::get_g1_pre_table(pp.g1_base);
-        pp.g2_table = asym::get_g2_pre_table(pp.g2_base);
-    }
-    return pp;
+IPFE::TAO::Msk IPFE::TAO::setup(const int size, const bool& pre){
+    // Create the msk instance.
+    Msk msk;
+
+    // First generate the bilinear pairing group.
+    msk.bpg = std::make_unique<BP>(pre);
+    // Sample a random value.
+    const Fp r = msk.bpg->Zp->rand();
+    // Generate the random matrix of desired size.
+    msk.b = msk.bpg->Zp->rand_mat(2 * size + 5, 2 * size + 5);
+    // Find its inverse transposed and multiplied with random value.
+    msk.bi = Field::mat_transpose(msk.bpg->Zp->mat_mul(msk.bpg->Zp->mat_inv(msk.b), r));
+    // Compute the base in the target group.
+    msk.base = std::make_unique<Gt>(msk.bpg->Gp->gt_raise(r));
+
+    return msk;
 }
 
-asym::ipfe::tao::Sk asym::ipfe::tao::setup(asym::ipfe::tao::Pp pp) {
-    asym::ipfe::tao::Sk sk{};
-    sk.B = asym::matrix_zp_rand(pp.c_size, pp.c_size, pp.mod);
-    sk.Bi = asym::matrix_transpose(asym::matrix_inverse(sk.B, pp.c_size, pp.mod), pp.c_size, pp.c_size);
+IPFE::TAO::Sk IPFE::TAO::keygen(const Msk& msk, const IntVec& function){
+    // Create a new vector of input vector and zeros.
+    IntVec input_vec(function.size() * 2 + 2);
+    std::copy(function.begin(), function.end(), input_vec.begin());
+
+    // Convert the input vector to field elements.
+    auto func_vec = msk.bpg->Zp->from_int(input_vec);
+
+    // Append desired values. (two random value and a zero).
+    func_vec.push_back(msk.bpg->Zp->rand());
+    func_vec.push_back(msk.bpg->Zp->rand());
+    func_vec.emplace_back(0);
+
+    // Create the Sk object.
+    Sk sk;
+
+    // Assign values to the secret key object.
+    sk.vec = msk.bpg->Gp->g2_raise(msk.bpg->Zp->mat_mul(func_vec, msk.b));
+
     return sk;
 }
 
-asym::ipfe::tao::Key asym::ipfe::tao::keyGen(asym::ipfe::tao::Pp pp, asym::ipfe::tao::Sk sk, const int *function) {
-    // Declare the returned key and convert message to Zp.
-    asym::ipfe::tao::Key key{};
-    asym::zpVec y = asym::vector_zp_from_int(function, pp.size, pp.mod);
+IPFE::TAO::Ct IPFE::TAO::enc(const Msk& msk, const IntVec& message){
+    // Create a new vector of input vector and zeros.
+    IntVec input_vec(message.size() * 2);
+    std::copy(message.begin(), message.end(), input_vec.begin());
 
-    // Get desired values.
-    int zero[] = {0};
-    asym::zpVec zero_vec = asym::vector_zp_from_int(zero, 1, pp.mod);
-    asym::zpVec rand_vec = asym::vector_zp_rand(2, pp.mod);
+    // Convert the input vector to field elements.
+    auto mess_vec = msk.bpg->Zp->from_int(input_vec);
 
-    // Get n + 2 zeros in Zp.
-    int zero_list[pp.size + 2];
-    for (int i = 0; i < pp.size + 2; ++i) { zero_list[i] = 0; }
+    // Append desired values. (two random value and three zeros).
+    mess_vec.push_back(msk.bpg->Zp->rand());
+    mess_vec.push_back(msk.bpg->Zp->rand());
+    mess_vec.emplace_back(0);
+    mess_vec.emplace_back(0);
+    mess_vec.emplace_back(0);
 
-    // Merge zeros with y to get new y.
-    y = asym::vector_join(y, asym::vector_zp_from_int(zero_list, pp.size + 2, pp.mod), pp.size, pp.size + 2);
+    // Create the Sk object.
+    Ct ct;
 
-    // Merge the random values.
-    y = asym::vector_join(y, rand_vec, pp.size * 2 + 2, 2);
-    y = asym::vector_join(y, zero_vec, pp.size * 2 + 4, 1);
-
-    // Compute g1^yB.
-    asym::zpMat yB = asym::matrix_multiply(y, sk.B, 1, pp.c_size, pp.c_size, pp.mod);
-    if (pp.pre) key.ct = asym::vector_raise_g1_with_table(pp.g1_table, yB, pp.c_size);
-    else key.ct = asym::vector_raise_g1(pp.g1_base, yB, pp.c_size);
-
-    return key;
-}
-
-asym::ipfe::tao::Ct asym::ipfe::tao::enc(asym::ipfe::tao::Pp pp, asym::ipfe::tao::Sk sk, const int *message) {
-    // Declare the returned ciphertext and convert message to Zp.
-    asym::ipfe::tao::Ct ct{};
-    asym::zpVec x = asym::vector_zp_from_int(message, pp.size, pp.mod);
-
-    // Get desired values.
-    int zero[] = {0};
-    asym::zpVec zero_vec = asym::vector_zp_from_int(zero, 1, pp.mod);
-    asym::zpVec rand_vec = asym::vector_zp_rand(2, pp.mod);
-
-    // Get n zeros in Zp.
-    int zero_list[pp.size];
-    for (int i = 0; i < pp.size; ++i) { zero_list[i] = 0; }
-
-    // Merge zeros with x to get new x.
-    x = asym::vector_join(x, asym::vector_zp_from_int(zero_list, pp.size, pp.mod), pp.size, pp.size);
-
-    // Merge the random values and three zeros.
-    x = asym::vector_join(x, rand_vec, pp.size * 2, 2);
-    x = asym::vector_join(x, zero_vec, pp.size * 2 + 2, 1);
-    x = asym::vector_join(x, zero_vec, pp.size * 2 + 3, 1);
-    x = asym::vector_join(x, zero_vec, pp.size * 2 + 4, 1);
-
-    // Compute g2^xBi.
-    asym::zpMat xBi = asym::matrix_multiply(x, sk.Bi, 1, pp.c_size, pp.c_size, pp.mod);
-    if (pp.pre) ct.ct = asym::vector_raise_g2_with_table(pp.g2_table, xBi, pp.c_size);
-    else ct.ct = asym::vector_raise_g2(pp.g2_base, xBi, pp.c_size);
+    // Assign values to the secret key object.
+    ct.vec = msk.bpg->Gp->g1_raise(msk.bpg->Zp->mat_mul(mess_vec, msk.bi));
 
     return ct;
 }
 
-int asym::ipfe::tao::dec(asym::ipfe::tao::Pp pp, asym::ipfe::tao::Key y, asym::ipfe::tao::Ct x) {
-    // Decrypt components.
-    asym::gt xy;
-    asym::inner_product(xy, y.ct, x.ct, pp.c_size);
-
-    // Get a target group element holder.
-    asym::gt output;
-
-    // Iterate through a loop to find correct answer.
-    for (int i = 1; i <= pp.bound; i++) {
-        asym::gt_raise_int(output, pp.gt_base, i);
-        if (asym::gt_compare(output, xy)) return i;
-    }
-
-    // Otherwise return 0 as the output.
-    return 0;
+int IPFE::TAO::dec(const Gt& base, const Sk& sk, const Ct& ct, const int lower_bound, const int upper_bound){
+    // Compute the target.
+    const auto target = Group::pair(ct.vec, sk.vec);
+    // Find the exponent and return it.
+    return Group::find_exp(base, target, lower_bound, upper_bound);
 }
-

@@ -1,79 +1,83 @@
 #include "ipfe_opt.hpp"
 
 // A global value for this specific scheme only.
-const static int B_SIZE = 4;
+static constexpr int B_SIZE = 4;
 
-sym::ipre::Pp sym::ipre::ppgen(bool pre, int size, int bound) {
-    sym::ipre::Pp pp{};
-    pp.pre = pre;
-    pp.size = size;
-    pp.bound = bound;
-    sym::init_get_order(pp.mod);
-    sym::g_gen(pp.g_base);
-    sym::bp_map(pp.gt_base, pp.g_base, pp.g_base);
-    if (pre) pp.table = sym::get_g_pre_table(pp.g_base);
-    return pp;
+IPFE::OPT::Msk IPFE::OPT::setup(const int size, const bool& pre){
+    // Create the msk instance.
+    Msk msk;
+
+    // First generate the bilinear pairing group.
+    msk.bpg = std::make_unique<BP>(pre);
+    // Generate the random rectangular matrix of desired size.
+    msk.a = msk.bpg->Zp->rand_mat(2, size);
+    // Generate the random matrix of desired size.
+    msk.b = msk.bpg->Zp->rand_mat(B_SIZE, B_SIZE);
+    // Find its inverse transposed.
+    msk.bi = Field::mat_transpose(msk.bpg->Zp->mat_inv(msk.b));
+
+    return msk;
 }
 
-sym::ipre::Sk sym::ipre::setup(sym::ipre::Pp pp) {
-    sym::ipre::Sk sk{};
-    sk.A = sym::matrix_zp_rand(2, pp.size, pp.mod);
-    sk.B = sym::matrix_zp_rand(B_SIZE, B_SIZE, pp.mod);
-    sk.Bi = sym::matrix_transpose(matrix_inverse(sk.B, B_SIZE, pp.mod), B_SIZE, B_SIZE);
+IPFE::OPT::Sk IPFE::OPT::keygen(const Msk& msk, const IntVec& function){
+    // First convert input function to field elements.
+    const auto input_vec = msk.bpg->Zp->from_int(function);
+
+    // We generate s and compute sa + f.
+    const auto s = msk.bpg->Zp->rand_vec(2);
+    const auto sa = msk.bpg->Zp->mat_mul(s, msk.a);
+    const auto saf = msk.bpg->Zp->vec_add(sa, input_vec);
+
+    // We compute fa^T + saa^T.
+    const auto fat = msk.bpg->Zp->mat_mul(msk.a, input_vec);
+    const auto aat = msk.bpg->Zp->mat_mul(msk.a, Field::mat_transpose(msk.a));
+    const auto saat = msk.bpg->Zp->mat_mul(aat, s);
+    const auto sum = msk.bpg->Zp->vec_add(fat, saat);
+
+    // We compute b * (s || fa^T + saa^T).
+    const auto ss = Field::vec_join(s, sum);
+    const auto bss = msk.bpg->Zp->mat_mul(msk.b, ss);
+
+    // Create the sk object.
+    Sk sk;
+
+    // Assign values to the secret key object.
+    sk.vec = msk.bpg->Gp->g2_raise(saf);
+    sk.r = msk.bpg->Gp->g2_raise(bss);
+
     return sk;
 }
 
-sym::ipre::Ct sym::ipre::enc(Pp pp, Sk sk, const int *message) {
-    // Declare the returned ciphertext and convert message to Zp.
-    sym::ipre::Ct ct{};
-    sym::zpVec x = sym::vector_zp_from_int(message, pp.size, pp.mod);
+IPFE::OPT::Ct IPFE::OPT::enc(const Msk& msk, const IntVec& message){
+    // First convert input function to field elements.
+    const auto input_vec = msk.bpg->Zp->from_int(message);
 
-    // We generate s and compute sA + x.
-    sym::zpVec s = sym::vector_zp_rand(2, pp.mod);
-    sym::zpVec sA = sym::matrix_multiply(s, sk.A, 1, 2, pp.size, pp.mod);
-    sym::zpVec sAx = sym::vector_add(sA, x, pp.size);
-    if (pp.pre) ct.ctx = sym::vector_raise_with_table(pp.table, sAx, pp.size);
-    else ct.ctx = sym::vector_raise(pp.g_base, sAx, pp.size);
+    // We generate s and compute sa + m.
+    const auto s = msk.bpg->Zp->rand_vec(2);
+    const auto sa = msk.bpg->Zp->mat_mul(s, msk.a);
+    const auto sam = msk.bpg->Zp->vec_add(sa, input_vec);
 
-    // We compute the function hiding inner product encryption ciphertext.
-    zpMat AT = sym::matrix_transpose(sk.A, 2, pp.size);
-    sym::zpVec xAT = sym::matrix_multiply(x, AT, 1, pp.size, 2, pp.mod);
-    sym::zpVec xATs = sym::vector_join(xAT, s, 2, 2);
-    sym::zpVec xATsB = sym::matrix_multiply(xATs, sk.B, 1, B_SIZE, B_SIZE, pp.mod);
-    if (pp.pre) ct.ctr = sym::vector_raise_with_table(pp.table, xATsB, B_SIZE);
-    else ct.ctr = sym::vector_raise(pp.g_base, xATsB, B_SIZE);
+    // We compute bi * (am || s).
+    const auto am = msk.bpg->Zp->mat_mul(msk.a, input_vec);
+    const auto ams = Field::vec_join(am, s);
+    const auto biams = msk.bpg->Zp->mat_mul(msk.bi, ams);
 
-    // We compute the function hiding inner product encryption derived key.
-    sym::zpVec sAAT = sym::matrix_multiply(sA, AT, 1, pp.size, 2, pp.mod);
-    sym::zpVec xATsAAT = sym::vector_add(xAT, sAAT, 2);
-    sym::zpVec sxATsAAT = sym::vector_join(s, xATsAAT, 2, 2);
-    sym::zpVec sxATsAATBi = sym::matrix_multiply(sxATsAAT, sk.Bi, 1, B_SIZE, B_SIZE, pp.mod);
-    if (pp.pre)ct.ctl = sym::vector_raise_with_table(pp.table, sxATsAATBi, B_SIZE);
-    else ct.ctl = sym::vector_raise(pp.g_base, sxATsAATBi, B_SIZE);
+    // Create the ct object.
+    Ct ct;
+
+    // Assign values to the ciphertext object.
+    ct.vec = msk.bpg->Gp->g1_raise(sam);
+    ct.r = msk.bpg->Gp->g1_raise(biams);
 
     return ct;
 }
 
-int sym::ipre::eval(Pp pp, Ct x, Ct y) {
-    // Decrypt components.
-    sym::gt xy, ct;
-    sym::inner_product(xy, x.ctx, y.ctx, pp.size);
-    sym::inner_product(ct, x.ctr, y.ctl, B_SIZE);
-
-    // Decrypt final result.
-    sym::gt_inverse(ct, ct);
-    sym::gt_multiply(xy, xy, ct);
-
-    // Get a target group element holder.
-    sym::gt output;
-
-    // Iterate through a loop to find correct answer.
-    for (int i = 1; i <= pp.bound; i++) {
-        sym::gt_raise_int(output, pp.gt_base, i);
-        if (sym::gt_compare(output, xy)) return i;
-    }
-
-    // Otherwise return 0 as the output.
-    return 0;
+int IPFE::OPT::dec(const Gt& base, const Sk& sk, const Ct& ct, const int lower_bound, const int upper_bound){
+    // Compute xy + r and r in the exponent.
+    const auto xyr = Group::pair(ct.vec, sk.vec);
+    const auto r = Group::pair(ct.r, sk.r);
+    // Compute the target.
+    const auto target = Group::gt_div(xyr, r);
+    // Find the exponent and return it.
+    return Group::find_exp(base, target, lower_bound, upper_bound);
 }
-
