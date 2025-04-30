@@ -23,7 +23,7 @@ TEST(TaoSchemeTests, InBound){
 
     // Close the group.
     BP::close();
-}
+} // LCOV_EXCL_LINE
 
 TEST(TaoSchemeTests, NotInBound){
     // Generate the master secret key.

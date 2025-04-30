@@ -21,7 +21,7 @@ TEST(KimSchemeTests, InBound){
 
     // Close the group.
     BP::close();
-}
+} // LCOV_EXCL_LINE
 
 TEST(KimSchemeTests, NotInBound){
     // Generate the master secret key.
