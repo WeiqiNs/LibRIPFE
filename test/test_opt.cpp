@@ -23,7 +23,7 @@ TEST(OptSchemeTests, InBound){
 
     // Close the group.
     BP::close();
-} // LCOV_EXCL_LINE
+}
 
 TEST(OptSchemeTests, NotInBound){
     // Generate the master secret key.
