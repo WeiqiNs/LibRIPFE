@@ -1,5 +1,5 @@
 #include <iostream>
-#include <RIPFE/ipfe_tao.hpp>
+#include <RIPFE/ipfe_opt.hpp>
 
 int main(){
     std::cout << "Testing import the RIPFE library..." << std::endl;
