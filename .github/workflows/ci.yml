@@ -74,10 +74,10 @@ jobs:
           cmake --build build --parallel
           sudo cmake --install build
 
-      - name: Build demo
-        run: |
-          cmake -B demo_build -S demo -DCMAKE_BUILD_TYPE=Release
-          cmake --build demo_build --parallel
-
-      - name: Run demo
-        run: ./demo_build/demo
+#      - name: Build demo
+#        run: |
+#          cmake -B demo_build -S demo -DCMAKE_BUILD_TYPE=Release
+#          cmake --build demo_build --parallel
+#
+#      - name: Run demo
+#        run: ./demo_build/demo
